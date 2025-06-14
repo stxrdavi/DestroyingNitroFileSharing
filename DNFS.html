@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DestroyingNitroFileSharing - Supabase Edition</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
+    <!-- SDK Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- SDK Stripe.js -->
+    <script src="https://js.stripe.com/v3/"></script>
+    <style>
+        /* Stili globali per il corpo della pagina */
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            background-color: #f3f4f6;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
+            text-align: center;
+        }
+
+        #header-container {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        /* Stile per il titolo principale */
+        h1 {
+            color: #2d3748;
+            margin: 0;
+            font-weight: 700;
+            font-family: 'Comfortaa', sans-serif;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+
+        #premium-indicator {
+            display: none;
+            background: linear-gradient(135deg, #ffaf7b, #d16ba5, #86a8e7, #5ffbf1);
+            background-size: 400% 400%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-family: 'Comfortaa', sans-serif;
+            font-weight: 700;
+            font-size: 1rem;
+            margin-top: 5px;
+            animation: shimmer 5s ease infinite;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* Stile per il selettore lingua */
+        #language-switcher {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.375rem;
+            border: 1px solid #e2e8f0;
+            background-color: white;
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Stile per il form di upload */
+        #file-upload-form {
+            background-color: #fff;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            padding: 2rem;
+            margin-bottom: 2rem;
+            width: 100%;
+            max-width: 400px;
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            border: 2px dashed #e2e8f0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        #file-upload-form:hover, #file-upload-form.dragover {
+            border-color: #4299e1;
+            background-color: #f7fafc;
+        }
+        #file-upload-form.uploading { cursor: wait; }
+        #file-upload-form label {
+            margin-bottom: 1.25rem;
+            font-weight: 600;
+            color: #4a5568;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+        }
+        #file-upload-form label span {
+            margin-top: 0.5rem;
+            font-size: 0.875rem;
+            font-family: 'Comfortaa', sans-serif;
+        }
+        #file-upload-icon {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 0.5rem;
+            background-image: url("https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/upload-cloud.svg");
+            background-size: cover;
+            background-position: center;
+        }
+        #file-input { opacity: 0; position: absolute; width: 100%; height: 100%; top: 0; left: 0; cursor: pointer; }
+        #upload-indicator {
+            display: none;
+            margin-top: 1rem;
+            color: #2d3748;
+            font-family: 'Comfortaa', sans-serif;
+        }
+        #file-upload-form.uploading #upload-indicator { display: block; }
+        #file-upload-form.uploading label { display: none; }
+        
+        /* Stili per la sezione Premium */
+        #premium-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 0.75rem;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            text-align: center;
+        }
+        #premium-section h2 {
+            font-family: 'Comfortaa', sans-serif;
+            font-size: 1.75rem;
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.2);
+        }
+        #premium-section p { margin-bottom: 1.5rem; opacity: 0.9; }
+        #premium-features { list-style: none; padding: 0; margin-bottom: 1.5rem; text-align: left; display: inline-block; }
+        #premium-features li { margin-bottom: 0.5rem; }
+        #premium-price { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; }
+        #premium-trial { font-size: 0.9rem; opacity: 0.9; margin-bottom: 1.5rem; }
+        #subscribe-button { background-color: #f7fafc; color: #764ba2; font-weight: 700; }
+
+        /* Contenitore della lista dei file */
+        #file-list-container {
+            background-color: #fff;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            padding: 2rem;
+            width: 100%;
+            max-width: 700px;
+            margin-top: 2rem;
+        }
+        #file-list-container h2 {
+            margin-top: 0;
+            color: #2d3748;
+            text-align: left;
+            margin-bottom: 1.5rem;
+            font-size: 1.25rem;
+            font-weight: 600;
+            font-family: 'Comfortaa', sans-serif;
+        }
+        #premium-perks {
+            display: none;
+            list-style: none;
+            padding: 0 0 1rem 0;
+            margin: -1rem 0 1rem 0;
+            border-bottom: 1px solid #e2e8f0;
+            color: #374151;
+            text-align: left;
+        }
+        #premium-perks li {
+            margin-bottom: 0.25rem;
+            font-size: 0.9rem;
+        }
+        #file-list { list-style: none; padding: 0; margin: 0; }
+        #file-list li {
+            border-bottom: 1px solid #e2e8f0;
+            padding: 0.75rem 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 1rem;
+            gap: 1rem;
+        }
+        #file-list li:last-child { border-bottom: none; }
+        #file-list li .file-info { flex-grow: 1; text-align: left; word-break: break-all; }
+        #file-list li .file-info span { color: #718096; font-size: 0.875rem; margin-left: 1rem; }
+        #file-list .file-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+
+        /* Messaggi, link di condivisione, pulsanti, etc. */
+        .message-box {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            padding: 1rem 1.5rem; border-radius: 0.5rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            font-family: 'Comfortaa', sans-serif; font-weight: 600; z-index: 1050;
+            display: none; opacity: 0; transition: all 0.3s ease;
+        }
+        .message-box.show { display: block; opacity: 1; top: 40px; }
+        .upload-success { background-color: #dcfce7; color: #166534; border: 1px solid #22c55e; }
+        .upload-error { background-color: #fee2e2; color: #991b1b; border: 1px solid #ef4444; }
+        .copy-success { background-color: #e0e7ff; color: #3730a3; border: 1px solid #6366f1; }
+        
+        #share-link-container {
+            margin-top: 1rem; display: none; flex-direction: column; align-items: stretch;
+            width: 100%; max-width: 400px; padding: 1rem; background-color: #fff;
+            border-radius: 0.5rem; box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        }
+        #share-link-container label { font-weight: 600; color: #4a5568; text-align: left; font-size: 0.875rem; margin-bottom: 0.5rem; }
+        #share-link { padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 0.375rem; font-size: 1rem; background-color: #edf2f7; word-wrap: break-word; }
+        
+        .action-button {
+            background-color: #4299e1; color: white; padding: 0.75rem 1rem;
+            border: none; border-radius: 0.375rem; cursor: pointer; font-size: 1rem;
+            transition: all 0.2s ease-in-out; font-weight: 600; font-family: 'Comfortaa', sans-serif;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08); margin-top: 0.75rem;
+        }
+        .action-button:hover { background-color: #3182ce; transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+        .action-button:active { transform: translateY(0); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1); }
+        .small-button { padding: 0.5rem 0.75rem; font-size: 0.8rem; margin-top: 0; }
+        .share-button { background-color: #6366f1; }
+        .share-button:hover { background-color: #4f46e5; }
+        
+        #user-id-display {
+            position: fixed; bottom: 10px; right: 100px; background-color: rgba(255, 255, 255, 0.8);
+            padding: 5px 10px; border-radius: 5px; font-size: 12px; color: #4a5568; font-family: monospace; z-index: 100;
+        }
+        
+        /* Stili Supporto Chat UI */
+        #support-fab {
+            position: fixed; bottom: 20px; right: 20px; width: 60px; height: 60px;
+            background-color: #6366f1; border-radius: 50%; display: flex; align-items: center;
+            justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            cursor: pointer; transition: transform 0.2s ease; z-index: 1000;
+        }
+        #support-fab:hover { transform: scale(1.1); }
+        #support-fab svg { color: white; width: 32px; height: 32px; }
+
+        #chat-widget {
+            position: fixed; bottom: 100px; right: 20px; width: 370px; max-width: 90%;
+            background-color: white; border-radius: 1rem; box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            display: flex; flex-direction: column; overflow: hidden; z-index: 999;
+            transform: scale(0.5); opacity: 0; transition: all 0.3s ease; transform-origin: bottom right;
+        }
+        #chat-widget.show { transform: scale(1); opacity: 1; }
+        #chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; padding: 1rem; font-weight: 600; display: flex;
+            justify-content: space-between; align-items: center;
+        }
+        #chat-close-btn { background: none; border: none; color: white; cursor: pointer; font-size: 1.5rem; }
+        #chat-messages {
+            flex-grow: 1; padding: 1rem; height: 350px; overflow-y: auto;
+            display: flex; flex-direction: column; gap: 0.75rem;
+        }
+        .chat-message {
+            padding: 0.75rem 1rem; border-radius: 1.25rem; max-width: 80%;
+            line-height: 1.4; word-wrap: break-word;
+        }
+        .user-message {
+            background-color: #6366f1; color: white; align-self: flex-end;
+            border-bottom-right-radius: 0.25rem;
+        }
+        .bot-message {
+            background-color: #f3f4f6; color: #2d3748; align-self: flex-start;
+            border-bottom-left-radius: 0.25rem;
+        }
+        #chat-input-container {
+            border-top: 1px solid #e2e8f0; padding: 1rem; display: flex; gap: 0.5rem; align-items: center;
+        }
+        #chat-input {
+            flex-grow: 1; border: 1px solid #e2e8f0; padding: 0.75rem;
+            border-radius: 999px; box-sizing: border-box;
+        }
+        #chat-send-btn {
+            flex-shrink: 0; width: 44px; height: 44px; border: none; border-radius: 50%;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            background-color: #6366f1; color: white; transition: background-color 0.2s;
+        }
+    </style>
+</head>
+<body>
+    <div id="header-container">
+        <div>
+            <h1 data-translate="main-title">DestroyingNitroFileSharing</h1>
+            <div id="premium-indicator">✨ Premium ✨</div>
+        </div>
+        <select id="language-switcher"></select>
+    </div>
+    
+    <div id="user-id-display">Connecting...</div>
+
+    <div id="message-box" class="message-box"></div>
+
+    <form id="file-upload-form">
+        <label for="file-input">
+            <div id="file-upload-icon"></div>
+            <span data-translate="upload-label">Trascina e rilascia il file qui o clicca per selezionarlo</span>
+        </label>
+        <input type="file" id="file-input" name="file" required>
+        <div id="upload-indicator" data-translate="upload-indicator">Caricamento in corso...</div>
+    </form>
+    
+    <div id="premium-section">
+        <h2 data-translate="premium-title">🚀 Passa a Premium! 🚀</h2>
+        <p data-translate="premium-subtitle">Ottieni il massimo da DestroyingNitroFileSharing con funzionalità esclusive.</p>
+        <ul id="premium-features">
+            <li data-translate="premium-feat1">✔️ Upload fino a 5GB per file</li>
+            <li data-translate="premium-feat3">✔️ Download alla massima velocità</li>
+            <li data-translate="premium-feat4">✔️ Supporto prioritario</li>
+        </ul>
+        <div id="premium-price" data-translate="premium-price">Solo <strong>1,99 €</strong> al mese</div>
+        <div id="premium-trial" data-translate="premium-trial">Dopo 7 giorni di prova gratuita</div>
+        <button id="subscribe-button" class="action-button" data-translate="subscribe-btn">Abbonati Ora</button>
+    </div>
+
+    <div id="share-link-container">
+        <label for="share-label" data-translate="share-label">Link di Condivisione:</label>
+        <input type="text" id="share-link" readonly>
+        <button id="copy-link-button" class="action-button" data-translate="copy-btn">Copia Link</button>
+    </div>
+
+    <div id="file-list-container">
+        <h2 data-translate="files-title">I Tuoi File Caricati</h2>
+        <ul id="premium-perks">
+            <li data-translate="perks-title"><strong>Vantaggi Premium Attivi:</strong></li>
+            <li data-translate="perk1">✓ Limite di upload aumentato a 5GB</li>
+            <li data-translate="perk3">✓ Download alla massima velocità</li>
+        </ul>
+        <ul id="file-list"></ul>
+    </div>
+    
+    <div id="support-fab">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
+    </div>
+    <div id="chat-widget">
+        <div id="chat-header"><span data-translate="support-title">Supporto</span><button id="chat-close-btn">&times;</button></div>
+        <div id="chat-messages"></div>
+        <div id="chat-input-container">
+            <input type="text" id="chat-input" data-translate-placeholder="chat-placeholder" placeholder="Scrivi un messaggio...">
+            <button id="chat-send-btn" title="Invia">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </button>
+        </div>
+    </div>
+
+    <script type="module">
+        // --- CONFIGURAZIONI ---
+        const supabaseUrl = 'https://xkbyvtmfrvvfcoddflku.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhrYnl2dG1mcnZ2ZmNvZGRmbGt1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk0NzIwMDcsImV4cCI6MjA2NTA0ODAwN30.bHTN9IWlJV3QdstfHemrMeHzpehEvqolfYAV5k_Q2z4';
+        const bucketName = 'filesharingdelcazzogodo';
+        const stripePublicKey = 'pk_test_51RZVapPEqde6U7oO5wORu4xBls90p1ElBitQtB3JASzps62IaHg1WtsqFQlGC4yUckwn9fuOAG0gYShotHLC5TS0003jKK7z1K';
+        const stripePriceId = 'price_1RZVidPEqde6U7oOm7ArKLwi'; 
+        const geminiApiKey = 'AIzaSyB2qZvQtzCjEOqy-mvLGJFnUYlcj3c6HOA';
+        
+        // --- INIZIALIZZAZIONE ---
+        const supabase = supabaseUrl && supabaseAnonKey ? window.supabase.createClient(supabaseUrl, supabaseAnonKey) : null;
+        const stripe = Stripe(stripePublicKey);
+        if (!supabase) showMessage('Configurazione di Supabase mancante.', 'error');
+        
+        // --- Riferimenti DOM ---
+        const dom = {
+            uploadForm: document.getElementById('file-upload-form'), fileInput: document.getElementById('file-input'),
+            fileList: document.getElementById('file-list'), shareContainer: document.getElementById('share-link-container'),
+            shareLinkInput: document.getElementById('share-link'), copyLinkBtn: document.getElementById('copy-link-button'),
+            userIdDisplay: document.getElementById('user-id-display'), subscribeBtn: document.getElementById('subscribe-button'),
+            supportFab: document.getElementById('support-fab'), chatWidget: document.getElementById('chat-widget'),
+            chatMessages: document.getElementById('chat-messages'), chatInput: document.getElementById('chat-input'),
+            chatSendBtn: document.getElementById('chat-send-btn'), chatCloseBtn: document.getElementById('chat-close-btn'), 
+            premiumIndicator: document.getElementById('premium-indicator'), premiumSection: document.getElementById('premium-section'), 
+            premiumPerks: document.getElementById('premium-perks'), languageSwitcher: document.getElementById('language-switcher')
+        };
+
+        let currentUserId = null;
+        let isPremium = localStorage.getItem('isPremium') === 'true';
+        let chatHistory = [];
+
+        // --- TRADUZIONI ---
+        const translations = {
+            it: { "main-title": "DestroyingNitroFileSharing", "upload-label": "Trascina e rilascia il file qui o clicca per selezionarlo", "upload-indicator": "Caricamento in corso...", "premium-title": "🚀 Passa a Premium! 🚀", "premium-subtitle": "Ottieni il massimo da DestroyingNitroFileSharing con funzionalità esclusive.", "premium-feat1": "✔️ Upload fino a 5GB per file", "premium-feat3": "✔️ Download alla massima velocità", "premium-feat4": "✔️ Supporto prioritario", "premium-price": "Solo <strong>1,99 €</strong> al mese", "premium-trial": "Dopo 7 giorni di prova gratuita", "subscribe-btn": "Abbonati Ora", "share-label": "Link di Condivisione:", "copy-btn": "Copia Link", "files-title": "I Tuoi File Caricati", "perks-title": "<strong>Vantaggi Premium Attivi:</strong>", "perk1": "✓ Limite di upload aumentato a 5GB", "perk3": "✓ Download alla massima velocità", "support-title": "Supporto", "chat-placeholder": "Scrivi un messaggio...", "bot-welcome": "Ciao! Sono il bot di supporto. Come posso aiutarti?", "bot-escalate-confirm": "Grazie! Ho inviato il tuo messaggio al nostro team. Ti risponderanno all'indirizzo dnfsupport@icloud.com il prima possibile.", "bot-escalate-premium": "Grazie! In qualità di utente Premium, la tua richiesta è stata contrassegnata come prioritaria (PREMIUM) e inviata al nostro team. Ti risponderanno all'indirizzo dnfsupport@icloud.com il prima possibile.", "share-btn-list": "Condividi", "gemini-error-generic": "Oops, qualcosa è andato storto. Riprova.", "gemini-error-connection": "Non sono riuscito a connettermi. Controlla la tua connessione e riprova." },
+            en: { "main-title": "DestroyingNitroFileSharing", "upload-label": "Drag and drop the file here or click to select it", "upload-indicator": "Uploading...", "premium-title": "🚀 Go Premium! 🚀", "premium-subtitle": "Get the most out of DestroyingNitroFileSharing with exclusive features.", "premium-feat1": "✔️ Upload up to 5GB per file", "premium-feat3": "✔️ Full speed downloads", "premium-feat4": "✔️ Priority support", "premium-price": "Only <strong>€1.99</strong> per month", "premium-trial": "After a 7-day free trial", "subscribe-btn": "Subscribe Now", "share-label": "Share Link:", "copy-btn": "Copy Link", "files-title": "Your Uploaded Files", "perks-title": "<strong>Active Premium Perks:</strong>", "perk1": "✓ Upload limit increased to 5GB", "perk3": "✓ Full speed downloads", "support-title": "Support", "chat-placeholder": "Write a message...", "bot-welcome": "Hi! I'm the support bot. How can I help you?", "bot-escalate-confirm": "Thanks! I've sent your message to our team. They will reply to dnfsupport@icloud.com as soon as possible.", "bot-escalate-premium": "Thank you! As a Premium user, your request has been marked as a priority (PREMIUM) and sent to our team. They will reply to dnfsupport@icloud.com as soon as possible.", "share-btn-list": "Share", "gemini-error-generic": "Oops, something went wrong. Please try again.", "gemini-error-connection": "I couldn't connect. Please check your connection and try again." },
+            es: { "main-title": "DestroyingNitroFileSharing", "upload-label": "Arrastra y suelta el archivo aquí o haz clic para seleccionarlo", "upload-indicator": "Subiendo...", "premium-title": "🚀 ¡Hazte Premium! 🚀", "premium-subtitle": "Aprovecha al máximo DestroyingNitroFileSharing con funciones exclusivas.", "premium-feat1": "✔️ Sube hasta 5GB por archivo", "premium-feat3": "✔️ Descargas a máxima velocidad", "premium-feat4": "✔️ Soporte prioritario", "premium-price": "Solo <strong>1,99 €</strong> al mes", "premium-trial": "Después de 7 días de prueba gratuita", "subscribe-btn": "Suscríbete Ahora", "share-label": "Enlace para Compartir:", "copy-btn": "Copiar Enlace", "files-title": "Tus Archivos Subidos", "perks-title": "<strong>Ventajas Premium Activas:</strong>", "perk1": "✓ Límite de subida aumentado a 5GB", "perk3": "✓ Descargas a máxima velocidad", "support-title": "Soporte", "chat-placeholder": "Escribe un mensaje...", "bot-welcome": "¡Hola! Soy el bot de soporte. ¿Cómo puedo ayudarte?", "bot-escalate-confirm": "¡Gracias! He enviado tu mensaje a nuestro equipo. Te responderán a dnfsupport@icloud.com lo antes posible.", "bot-escalate-premium": "¡Gracias! Como usuario Premium, tu solicitud ha sido marcada como prioritaria (PREMIUM) y enviada a nuestro equipo. Te responderán a dnfsupport@icloud.com lo antes posible.", "share-btn-list": "Compartir", "gemini-error-generic": "Vaya, algo salió mal. Inténtalo de nuevo.", "gemini-error-connection": "No pude conectarme. Revisa tu conexión e inténtalo de nuevo." },
+            fr: { "main-title": "DestroyingNitroFileSharing", "upload-label": "Glissez-déposez le fichier ici ou cliquez pour le sélectionner", "upload-indicator": "Chargement...", "premium-title": "🚀 Passez à Premium ! 🚀", "premium-subtitle": "Profitez au maximum de DestroyingNitroFileSharing avec des fonctionnalités exclusives.", "premium-feat1": "✔️ Téléversement jusqu'à 5 Go par fichier", "premium-feat3": "✔️ Téléchargements à pleine vitesse", "premium-feat4": "✔️ Support prioritaire", "premium-price": "Seulement <strong>1,99 €</strong> par mois", "premium-trial": "Après 7 jours d'essai gratuit", "subscribe-btn": "Abonnez-vous", "share-label": "Lien de Partage:", "copy-btn": "Copier le Lien", "files-title": "Vos Fichiers Téléversés", "perks-title": "<strong>Avantages Premium Actifs :</strong>", "perk1": "✓ Limite de téléversement augmentée à 5 Go", "perk3": "✓ Téléchargements à pleine vitesse", "support-title": "Support", "chat-placeholder": "Écrivez un message...", "bot-welcome": "Bonjour ! Je suis le bot de support. Comment puis-je vous aider ?", "bot-escalate-confirm": "Merci ! J'ai envoyé votre message à notre équipe. Ils répondront à dnfsupport@icloud.com dès que possible.", "bot-escalate-premium": "Merci ! En tant qu'utilisateur Premium, votre demande a été marquée comme prioritaire (PREMIUM) et envoyée à notre équipe. Ils répondront à dnfsupport@icloud.com dès que possible.", "share-btn-list": "Partager", "gemini-error-generic": "Oups, quelque chose s'est mal passé. Veuillez réessayer.", "gemini-error-connection": "Je n'ai pas pu me connecter. Veuillez vérifier votre connexion et réessayer." }
+        };
+
+        // --- FUNZIONI PRINCIPALI ---
+        function getCurrentLang() { return localStorage.getItem('language') || 'it'; }
+
+        function setLanguage(lang) {
+            document.documentElement.lang = lang;
+            document.querySelectorAll('[data-translate]').forEach(el => {
+                const key = el.getAttribute('data-translate');
+                if (translations[lang] && translations[lang][key]) {
+                    el.innerHTML = translations[lang][key];
+                }
+            });
+            document.querySelectorAll('[data-translate-placeholder]').forEach(el => {
+                const key = el.getAttribute('data-translate-placeholder');
+                 if (translations[lang] && translations[lang][key]) {
+                    el.placeholder = translations[lang][key];
+                }
+            });
+            localStorage.setItem('language', lang);
+            dom.languageSwitcher.value = lang;
+        }
+
+        function applyPremiumFeatures() {
+            if (isPremium) {
+                dom.premiumIndicator.style.display = 'inline-block';
+                dom.premiumSection.style.display = 'none';
+                dom.premiumPerks.style.display = 'block';
+            }
+        }
+        
+        async function handleFileUpload(file) {
+            if (!currentUserId || !supabase) { showMessage('Servizio non pronto.', 'error'); return; }
+            if (!file) return;
+
+            const maxSizeInBytes = isPremium ? 5 * 1024 * 1024 * 1024 : 100 * 1024 * 1024;
+            if (file.size > maxSizeInBytes) {
+                showMessage(`File troppo grande. Limite: ${isPremium ? '5GB' : '100MB'}.`, 'error');
+                return;
+            }
+
+            dom.uploadForm.classList.add('uploading');
+            const filePath = `${currentUserId}/${Date.now()}_${file.name}`;
+
+            try {
+                const { error: uploadError } = await supabase.storage.from(bucketName).upload(filePath, file);
+                if (uploadError) throw uploadError;
+
+                const { data } = await supabase.storage.from(bucketName).getPublicUrl(filePath);
+                if (!data || !data.publicUrl) throw new Error("Impossibile ottenere l'URL pubblico.");
+                
+                await saveFileMetadata(file.name, file.size, file.type, data.publicUrl, filePath);
+                const shareableLink = `${window.location.origin}/download.html?url=${encodeURIComponent(data.publicUrl)}&name=${encodeURIComponent(file.name)}&type=${encodeURIComponent(file.type)}&premium=${isPremium}`;
+                dom.shareLinkInput.value = shareableLink;
+                dom.shareContainer.style.display = 'flex';
+                showMessage('File caricato con successo!', 'success');
+
+            } catch (error) {
+                console.error("Upload failed:", error);
+                showMessage(`Upload fallito: ${error.message}`, 'error');
+            } finally {
+                dom.uploadForm.classList.remove('uploading');
+                dom.fileInput.value = '';
+            }
+        }
+        
+        async function saveFileMetadata(name, size, type, url, path) {
+            try {
+                const { error } = await supabase.from('files').insert([{ 
+                    name, size, type, 
+                    download_url: url, 
+                    storage_path: path, 
+                    owner_id: currentUserId 
+                }]);
+                if (error) throw error;
+            } catch (error) {
+                console.error("Error saving metadata to Supabase: ", error);
+                showMessage('Errore nel salvataggio dei dati.', 'error');
+            }
+        }
+
+        async function fetchUserFiles() {
+            if (!currentUserId || !supabase) return;
+            const { data, error } = await supabase.from('files').select('*').eq('owner_id', currentUserId).order('created_at', { ascending: false });
+            if (error) {
+                showMessage('Impossibile caricare i file.', 'error');
+                return;
+            }
+            dom.fileList.innerHTML = ''; 
+            data.forEach(file => addFileToList(file.id, file));
+        }
+
+        function addFileToList(docId, fileData) {
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <div class="file-info">${fileData.name} <span>(${formatFileSize(fileData.size)})</span></div>
+                <div class="file-actions">
+                    <button class="action-button small-button share-button" data-url="${fileData.download_url}" data-name="${fileData.name}" data-type="${fileData.type}" data-translate="share-btn-list">Condividi</button>
+                </div>
+            `;
+            dom.fileList.appendChild(li);
+        }
+
+        function showMessage(text, type = 'success') {
+            const box = document.getElementById('message-box');
+            box.textContent = text;
+            box.className = `message-box ${type === 'success' ? 'upload-success' : 'copy-success'}`;
+            if(type === 'error') box.classList.add('upload-error');
+            box.classList.add('show');
+            setTimeout(() => box.classList.remove('show'), 3000);
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+        }
+        
+        // --- INIZIALIZZAZIONE E EVENT LISTENERS ---
+        document.addEventListener('DOMContentLoaded', () => {
+            const languages = { it: 'Italiano', en: 'English', es: 'Español', fr: 'Français' };
+            for (const [code, name] of Object.entries(languages)) {
+                const option = new Option(name, code);
+                dom.languageSwitcher.add(option);
+            }
+            
+            const savedLang = localStorage.getItem('language') || 'it';
+            setLanguage(savedLang);
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('session_id')) {
+                localStorage.setItem('isPremium', 'true');
+                isPremium = true;
+                showMessage('Grazie per il tuo acquisto! Funzioni Premium attivate.', 'success');
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+            applyPremiumFeatures();
+        });
+        
+        supabase.auth.onAuthStateChange((event, session) => {
+            if (session && session.user) {
+                currentUserId = session.user.id;
+                dom.userIdDisplay.textContent = `User ID: ${currentUserId}`;
+                fetchUserFiles();
+                 supabase
+                  .channel('public:files')
+                  .on('postgres_changes', { event: '*', schema: 'public', table: 'files', filter: `owner_id=eq.${currentUserId}` }, () => fetchUserFiles())
+                  .subscribe();
+            } else {
+                currentUserId = null;
+                dom.userIdDisplay.textContent = `Connecting...`;
+            }
+        });
+
+        (async () => {
+            const { data: { session }} = await supabase.auth.getSession();
+            if (!session) {
+                const { error } = await supabase.auth.signInAnonymously();
+                 if (error) showMessage('Errore di autenticazione.', 'error');
+            }
+        })();
+
+        dom.languageSwitcher.addEventListener('change', (e) => setLanguage(e.target.value));
+        dom.fileInput.addEventListener('change', (e) => handleFileUpload(e.target.files[0]));
+        dom.uploadForm.addEventListener('dragover', e => { e.preventDefault(); dom.uploadForm.classList.add('dragover'); });
+        dom.uploadForm.addEventListener('dragleave', () => dom.uploadForm.classList.remove('dragover'));
+        dom.uploadForm.addEventListener('drop', e => {
+            e.preventDefault();
+            dom.uploadForm.classList.remove('dragover');
+            handleFileUpload(e.dataTransfer.files[0]);
+        });
+        
+        dom.fileList.addEventListener('click', (e) => {
+            if (e.target.classList.contains('share-button')) {
+                const { url, name, type } = e.target.dataset;
+                const shareableLink = `${window.location.origin}/download.html?url=${encodeURIComponent(url)}&name=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}&premium=${isPremium}`;
+                dom.shareLinkInput.value = shareableLink;
+                dom.shareContainer.style.display = 'flex';
+                dom.copyLinkBtn.focus();
+            }
+        });
+
+        dom.copyLinkBtn.addEventListener('click', () => {
+            dom.shareLinkInput.select();
+            document.execCommand('copy');
+            showMessage('Link copiato!', 'copy-success');
+        });
+
+        dom.subscribeBtn.addEventListener('click', async () => {
+            try {
+                const { error } = await stripe.redirectToCheckout({
+                    lineItems: [{ price: stripePriceId, quantity: 1 }],
+                    mode: 'subscription',
+                    successUrl: `${window.location.origin}${window.location.pathname}?session_id={CHECKOUT_SESSION_ID}`,
+                    cancelUrl: `${window.location.origin}${window.location.pathname}`,
+                });
+                if (error) showMessage(`Errore Stripe: ${error.message}`, 'error');
+            } catch (e) { showMessage('Impossibile avviare il checkout.', 'error'); }
+        });
+
+        // Chat Logic
+        function addMessageToChat(text, sender) {
+            const messageEl = document.createElement('div');
+            messageEl.classList.add('chat-message', `${sender}-message`);
+            messageEl.textContent = text;
+            dom.chatMessages.appendChild(messageEl);
+            dom.chatMessages.scrollTop = dom.chatMessages.scrollHeight;
+        }
+
+        function resetChat() {
+            dom.chatMessages.innerHTML = '';
+            chatHistory = [];
+            addMessageToChat(translations[getCurrentLang()]['bot-welcome'], 'bot');
+        }
+        
+        dom.supportFab.addEventListener('click', () => {
+            dom.chatWidget.classList.add('show');
+            if (dom.chatMessages.children.length === 0) {
+                resetChat();
+            }
+        });
+        dom.chatCloseBtn.addEventListener('click', () => dom.chatWidget.classList.remove('show'));
+        
+        async function getGeminiResponse() {
+            const lang = getCurrentLang();
+            const systemPrompt = `Sei un assistente virtuale amichevole e disponibile per il sito 'DestroyingNitroFileSharing'. Il tuo obiettivo è aiutare gli utenti a risolvere i loro problemi. Rispondi sempre nella lingua con codice '${lang}'. Le tue capacità includono: rispondere a domande su come usare il sito, problemi con l'upload, e informazioni sull'abbonamento Premium. Se non puoi rispondere a una domanda o se l'utente chiede esplicitamente di parlare con un umano, rispondi solo ed esclusivamente con il testo [ESCALATE]. Non aggiungere altre parole o frasi.`;
+            
+            const payload = {
+                contents: chatHistory,
+                system_instruction: { 
+                    parts: [{ text: systemPrompt }]
+                }
+            };
+            
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                
+                if (result.error) {
+                    console.error('Gemini API Error:', result.error.message);
+                    addMessageToChat(translations[lang]['gemini-error-generic'], 'bot');
+                    return;
+                }
+
+                if (result.candidates && result.candidates[0].content && result.candidates[0].content.parts[0]) {
+                    const botResponse = result.candidates[0].content.parts[0].text;
+
+                    if (botResponse.trim() === '[ESCALATE]') {
+                        const messageKey = isPremium ? 'bot-escalate-premium' : 'bot-escalate-confirm';
+                        addMessageToChat(translations[lang][messageKey], 'bot');
+                    } else {
+                        addMessageToChat(botResponse, 'bot');
+                    }
+                    chatHistory.push({ role: 'model', parts: [{ text: botResponse }] });
+                } else {
+                   console.warn('Gemini response missing candidates or content:', result);
+                   addMessageToChat(translations[lang]['gemini-error-generic'], 'bot');
+                }
+            } catch(error) {
+                console.error("Fetch API error:", error);
+                addMessageToChat(translations[lang]['gemini-error-connection'], 'bot');
+            }
+        }
+
+        const sendChatMessage = () => {
+            const text = dom.chatInput.value.trim();
+            if (text) {
+                addMessageToChat(text, 'user');
+                chatHistory.push({ role: 'user', parts: [{ text }] });
+                getGeminiResponse();
+                dom.chatInput.value = '';
+            }
+        };
+
+        dom.chatSendBtn.addEventListener('click', sendChatMessage);
+        dom.chatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendChatMessage(); });
+
+        // Easter Egg Logic
+        const secretCode = ['t', 'e', 's', 't', 'i', 'n', 'g'];
+        let secretCodeIndex = 0;
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT') return;
+            if (e.key.toLowerCase() === secretCode[secretCodeIndex]) {
+                secretCodeIndex++;
+                if (secretCodeIndex === secretCode.length) {
+                    if (!isPremium) {
+                        showMessage('Codice segreto attivato! Goditi le funzioni Premium.', 'success');
+                        localStorage.setItem('isPremium', 'true');
+                        isPremium = true;
+                        applyPremiumFeatures();
+                    }
+                    secretCodeIndex = 0;
+                }
+            } else {
+                secretCodeIndex = 0;
+            }
+        });
+
+    </script>
+</body>
+</html>
